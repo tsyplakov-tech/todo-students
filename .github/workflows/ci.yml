@@ -3,6 +3,14 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      manual_check:
+        description: Check to run alongside CI
+        type: choice
+        default: database
+        options:
+          - database
+          - runtime
 permissions:
   contents: read
 jobs:
@@ -28,6 +36,45 @@ jobs:
       - run: docker compose --env-file .env.example config --quiet
       - name: Build runtime Docker image
         run: docker build --target runtime -t todo-students:ci .
+      - name: Check application with GitHub Actions secrets
+        if: github.event_name == 'workflow_dispatch' && inputs.manual_check == 'runtime'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          MOODLE_LOGIN: ${{ secrets.MOODLE_LOGIN }}
+          MOODLE_FULL_NAME: ${{ secrets.MOODLE_FULL_NAME }}
+          HOST: ${{ vars.HOST || '0.0.0.0' }}
+          PORT: ${{ vars.PORT || '3000' }}
+        shell: bash
+        run: |
+          node --input-type=module -e "import { loadConfig } from './src/config.js'; loadConfig();"
+          container_id=$(docker run --detach --rm \
+            --env DATABASE_URL --env API_TOKEN --env MOODLE_LOGIN --env MOODLE_FULL_NAME \
+            --env HOST --env PORT todo-students:ci)
+          trap 'docker stop "$container_id" >/dev/null' EXIT
+          docker exec -i "$container_id" node --input-type=module <<'JS'
+          import { setTimeout as delay } from 'node:timers/promises';
+
+          const { HOST, PORT, API_TOKEN } = process.env;
+          const address = { '0.0.0.0': '127.0.0.1', '::': '::1' }[HOST] ?? HOST;
+          const hostname = address.includes(':') ? `[${address}]` : address;
+          const url = `http://${hostname}:${PORT}/api/tasks/?runId=ci_runtime`;
+
+          for (let attempt = 1; ; attempt++) {
+            try {
+              const response = await fetch(url, {
+                headers: { Authorization: `Bearer ${API_TOKEN}` },
+                signal: AbortSignal.timeout(10000),
+              });
+              if (!response.ok) throw new Error(`Application database check returned HTTP ${response.status}`);
+              break;
+            } catch (error) {
+              if (attempt === 6 || error.cause?.code !== 'ECONNREFUSED') throw error;
+              await delay(1000);
+            }
+          }
+          console.log('Application database check passed');
+          JS
       - run: npm audit --omit=dev --audit-level=high
       - uses: actions/upload-artifact@v4
         with:
@@ -36,7 +83,7 @@ jobs:
           retention-days: 7
   database-checks:
     name: Integration and browser tests
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.manual_check == 'database'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency: todo-students-test-database
