@@ -7,13 +7,9 @@ permissions:
   contents: read
 jobs:
   checks:
-    name: Node ${{ matrix.node }} / Prisma
+    name: Node 24 / Prisma
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [22, 24]
     env:
       CHECKPOINT_DISABLE: "1"
       PRISMA_HIDE_UPDATE_MESSAGE: "1"
@@ -21,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run prisma:validate
@@ -31,12 +27,11 @@ jobs:
       - run: npm run build
       - run: docker compose --env-file .env.example config --quiet
       - name: Build runtime Docker image
-        if: matrix.node == 22
         run: docker build --target runtime -t todo-students:ci .
       - run: npm audit --omit=dev --audit-level=high
       - uses: actions/upload-artifact@v4
         with:
-          name: todo-students-node-${{ matrix.node }}
+          name: todo-students-node-24
           path: dist/
           retention-days: 7
   database-checks:
