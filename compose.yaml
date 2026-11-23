@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      MOODLE_LOGIN: ${MOODLE_LOGIN:?Set MOODLE_LOGIN}
+      MOODLE_FULL_NAME: ${MOODLE_FULL_NAME:?Set MOODLE_FULL_NAME}
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN}
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    restart: unless-stopped

@@ -1,0 +1,70 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    name: Node ${{ matrix.node }} / Prisma
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    env:
+      CHECKPOINT_DISABLE: "1"
+      PRISMA_HIDE_UPDATE_MESSAGE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:validate
+      - run: npm run prisma:generate
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: docker compose --env-file .env.example config --quiet
+      - name: Build runtime Docker image
+        if: matrix.node == 22
+        run: docker build --target runtime -t todo-students:ci .
+      - run: npm audit --omit=dev --audit-level=high
+      - uses: actions/upload-artifact@v4
+        with:
+          name: todo-students-node-${{ matrix.node }}
+          path: dist/
+          retention-days: 7
+  database-checks:
+    name: Integration and browser tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency: todo-students-test-database
+    env:
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Check test database configuration
+        run: |
+          node -e "const url = URL.canParse(process.env.TEST_DATABASE_URL) && new URL(process.env.TEST_DATABASE_URL); if (!url || !url.pathname.endsWith('_test')) { console.error('Set TEST_DATABASE_URL to a dedicated PostgreSQL database ending in _test'); process.exit(1); }"
+      - run: npm ci
+      - run: npm run prisma:generate
+      - name: Apply and verify migrations
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: |
+          npm run db:migrate
+          npm run db:check
+        shell: bash
+      - run: npm run test:integration
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

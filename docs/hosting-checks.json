@@ -1,0 +1,52 @@
+{
+  "checked_at": "2026-11-23T10:35:31.145872+00:00",
+  "checks": [
+    {
+      "url": "https://timeweb.cloud/services/postgresql",
+      "status": 200,
+      "bytes_read": 456939
+    },
+    {
+      "url": "https://timeweb.cloud/docs/dbaas/dbaas-create",
+      "status": 200,
+      "bytes_read": 330024
+    },
+    {
+      "url": "https://supabase.com/pricing",
+      "status": 200,
+      "bytes_read": 405246
+    },
+    {
+      "url": "https://supabase.com/docs/guides/database/connecting-to-postgres",
+      "status": 200,
+      "bytes_read": 339622
+    },
+    {
+      "url": "https://se.ifmo.ru/courses/db",
+      "status": 200,
+      "bytes_read": 67417
+    },
+    {
+      "url": "https://se.ifmo.ru/courses/programming",
+      "status": 200,
+      "bytes_read": 162249
+    },
+    {
+      "host": "helios.cs.ifmo.ru",
+      "port": 2222,
+      "banner": "SSH-2.0-OpenSSH_10.0 FreeBSD-20250801",
+      "authentication": "not attempted: no supplied account"
+    }
+  ],
+  "helios_follow_up": {
+    "reported_by": "project author",
+    "ssh_login_verified": true,
+    "postgresql_over_ssh_tunnel_verified": true,
+    "application_deployed": false,
+    "home_directory_quota_gib": 1,
+    "database_quota": null,
+    "server_max_connections": 512,
+    "role_creation_requires_admin": true,
+    "database_creation_requires_admin": true
+  }
+}

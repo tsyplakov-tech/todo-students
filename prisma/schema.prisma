@@ -1,0 +1,25 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["todo"]
+}
+
+model Task {
+  id         String   @id @db.Uuid
+  ownerLogin String   @map("owner_login") @db.Text
+  title      String   @db.Text
+  done       Boolean  @default(false)
+  runId      String   @map("run_id") @db.VarChar(64)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([ownerLogin, runId, createdAt], map: "tasks_owner_run_created_idx")
+  @@map("tasks")
+  @@schema("todo")
+}
