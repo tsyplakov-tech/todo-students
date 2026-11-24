@@ -23,7 +23,9 @@ docker compose --env-file .env.example config --quiet
 Браузерный тест запускает собственный сервер на 3011 и использует фиктивный профиль e2e_student.
 Тесты создают и удаляют собственные данные. Для дополнительной проверки ограничений доступа задайте `TEST_APP_URL` и `TEST_REVIEWER_URL` для двух готовых ограниченных ролей в той же тестовой БД. Этот тест временно создаёт `todo.private_notes`.
 
-Джоба `runtime` запускается при push, pull request из того же репозитория и через **Actions → CI → Run workflow**. Она выполняет валидацию Prisma, генерацию клиента, lint, unit/API-тесты, сборку и аудит, а также проверяет чтение списка дел через API в контейнере. Для pull request из форков джоба пропускается, поскольку секреты недоступны.
+Джоба `runtime` запускается на основной ветке после push или через **Actions → CI → Run workflow**. Она выполняет валидацию Prisma, генерацию клиента, lint, unit/API-тесты, сборку и аудит, а также проверяет чтение списка дел через API в контейнере.
+
+В **Settings → Actions → Runners → New self-hosted runner** зарегистрируйте Linux-раннер с меткой `todo-students` на машине в сети PostgreSQL. На машине должны быть Docker и Compose, доступные пользователю раннера. В `DATABASE_URL` используйте внутренний IP или DNS-имя PostgreSQL, доступные из контейнера. [Регистрация раннера](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners) · [Настройка метки](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/apply-labels).
 
 Добавьте секреты `DATABASE_URL`, `API_TOKEN`, `MOODLE_LOGIN` и `MOODLE_FULL_NAME` в **Settings → Secrets and variables → Actions**. БД должна быть доступна с раннера, а таблица `todo.tasks` должна быть подготовлена. Контейнер останавливается после проверки. Интеграционные и браузерные тесты можно запустить локально командами выше.
 
