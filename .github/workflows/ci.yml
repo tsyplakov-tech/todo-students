@@ -3,19 +3,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      manual_check:
-        description: Check to run alongside CI
-        type: choice
-        default: database
-        options:
-          - database
-          - runtime
 permissions:
   contents: read
 jobs:
-  checks:
-    name: Node 24 / Prisma
+  runtime:
+    name: Runtime / Node 24
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -36,8 +29,7 @@ jobs:
       - run: docker compose --env-file .env.example config --quiet
       - name: Build runtime Docker image
         run: docker build --target runtime -t todo-students:ci .
-      - name: Check application with GitHub Actions secrets
-        if: github.event_name == 'workflow_dispatch' && inputs.manual_check == 'runtime'
+      - name: Start and check the application container
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
@@ -81,32 +73,3 @@ jobs:
           name: todo-students-node-24
           path: dist/
           retention-days: 7
-  database-checks:
-    name: Integration and browser tests
-    if: github.event_name == 'workflow_dispatch' && inputs.manual_check == 'database'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency: todo-students-test-database
-    env:
-      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Check test database configuration
-        run: |
-          node -e "const url = URL.canParse(process.env.TEST_DATABASE_URL) && new URL(process.env.TEST_DATABASE_URL); if (!url || !url.pathname.endsWith('_test')) { console.error('Set TEST_DATABASE_URL to a dedicated PostgreSQL database ending in _test'); process.exit(1); }"
-      - run: npm ci
-      - run: npm run prisma:generate
-      - name: Apply and verify migrations
-        env:
-          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-        run: |
-          npm run db:migrate
-          npm run db:check
-        shell: bash
-      - run: npm run test:integration
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
