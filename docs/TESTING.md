@@ -25,11 +25,15 @@ docker compose --env-file .env.example config --quiet
 
 Джоба `runtime` запускается на основной ветке после push или через **Actions → CI → Run workflow**. Она выполняет валидацию Prisma, генерацию клиента, lint, unit/API-тесты, сборку и аудит, а также проверяет чтение списка дел через API в контейнере.
 
-В **Settings → Actions → Runners → New self-hosted runner** зарегистрируйте Linux-раннер с меткой `todo-students` на машине в сети PostgreSQL. На машине должны быть Docker и Compose, доступные пользователю раннера. В `DATABASE_URL` используйте внутренний IP или DNS-имя PostgreSQL, доступные из контейнера. [Регистрация раннера](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners) · [Настройка метки](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/apply-labels).
+В **Settings → Actions → Runners → New self-hosted runner** зарегистрируйте Linux-раннер. На машине должны быть Docker и Compose, доступные пользователю раннера. [Регистрация раннера](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners).
 
-Добавьте секреты `DATABASE_URL`, `API_TOKEN`, `MOODLE_LOGIN` и `MOODLE_FULL_NAME` в **Settings → Secrets and variables → Actions**. БД должна быть доступна с раннера, а таблица `todo.tasks` должна быть подготовлена. Контейнер останавливается после проверки. Интеграционные и браузерные тесты можно запустить локально командами выше.
+Если PostgreSQL подключён к сети Docker `infrastructure`, CI присоединяет контейнер к этой сети. В `DATABASE_URL` укажите имя сервиса PostgreSQL или его сетевой алиас и внутренний порт `5432`. Раннер должен использовать тот же Docker Engine. Если фактическое имя сети отличается, например `db_infrastructure`, задайте его в переменной Actions `DOCKER_NETWORK`. [Сети Docker Compose](https://docs.docker.com/compose/how-tos/networking).
 
-В **Settings → Secrets and variables → Actions → Variables** задайте `HOST` и `PORT` для адреса и порта прослушивания внутри контейнера. Если их не указать, используются `0.0.0.0` и `3000`. Для `HOST` можно также указать `127.0.0.1`, поскольку проверка API выполняется внутри контейнера.
+Для `127.0.0.1`, `localhost` и `::1` в `DATABASE_URL` CI использует сеть хоста. Этот режим подходит для PostgreSQL, опубликованного на loopback того же Linux-хоста. [Сеть хоста в Docker](https://docs.docker.com/engine/network/drivers/host/).
+
+Добавьте секреты `DATABASE_URL`, `API_TOKEN`, `MOODLE_LOGIN` и `MOODLE_FULL_NAME` в **Settings → Secrets and variables → Actions**. БД должна быть доступна с раннера, а таблица `todo.tasks` должна быть подготовлена. При `503` CI отдельно проверяет подключение и чтение таблицы из того же контейнера. В журнал выводится этап сбоя и код ошибки без строки подключения. Контейнер останавливается после проверки. Интеграционные и браузерные тесты можно запустить локально командами выше.
+
+В **Settings → Secrets and variables → Actions → Variables** задайте `HOST` и `PORT` для адреса и порта прослушивания. По умолчанию используются `127.0.0.1` и `3000`. При использовании сети хоста порт приложения должен быть свободен на хосте.
 
 Runtime приложения не использует pg напрямую или Prisma raw SQL: src/db.js работает с моделью Task.
 Драйвер pg используется адаптером Prisma и SQL-подключениями тестов,

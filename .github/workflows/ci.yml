@@ -1,74 +1,63 @@
 name: CI
+
 on:
   push:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   runtime:
     name: Runtime / Node 24
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: self-hosted
     timeout-minutes: 15
+    concurrency:
+      group: todo-students-runtime
+      cancel-in-progress: false
     env:
-      CHECKPOINT_DISABLE: "1"
-      PRISMA_HIDE_UPDATE_MESSAGE: "1"
+      CHECKPOINT_DISABLE: '1'
+      PRISMA_HIDE_UPDATE_MESSAGE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      - run: npm run prisma:validate
-      - run: npm run prisma:generate
-      - run: npm run check
-      - run: npm test
-      - run: npm run build
-      - run: docker compose --env-file .env.example config --quiet
-      - name: Build runtime Docker image
-        run: docker build --target runtime -t todo-students:ci .
-      - name: Start and check the application container
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and test
+        shell: bash
+        run: |
+          npm run prisma:validate
+          npm run build
+          npm run check
+          npm test
+          npm audit --omit=dev --audit-level=high
+
+      - name: Build Docker image
+        shell: bash
+        run: |
+          docker compose --env-file .env.example config --quiet
+          docker build --target runtime --tag todo-students:ci .
+
+      - name: Verify application and PostgreSQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           MOODLE_LOGIN: ${{ secrets.MOODLE_LOGIN }}
           MOODLE_FULL_NAME: ${{ secrets.MOODLE_FULL_NAME }}
-          HOST: ${{ vars.HOST || '0.0.0.0' }}
+          HOST: ${{ vars.HOST || '127.0.0.1' }}
           PORT: ${{ vars.PORT || '3000' }}
-        shell: bash
-        run: |
-          node --input-type=module -e "import { loadConfig } from './src/config.js'; loadConfig();"
-          container_id=$(docker run --detach --rm \
-            --env DATABASE_URL --env API_TOKEN --env MOODLE_LOGIN --env MOODLE_FULL_NAME \
-            --env HOST --env PORT todo-students:ci)
-          trap 'docker stop "$container_id" >/dev/null' EXIT
-          docker exec -i "$container_id" node --input-type=module <<'JS'
-          import { setTimeout as delay } from 'node:timers/promises';
+          DOCKER_NETWORK: ${{ vars.DOCKER_NETWORK }}
+        run: bash .github/scripts/check-runtime.sh todo-students:ci
 
-          const { HOST, PORT, API_TOKEN } = process.env;
-          const address = { '0.0.0.0': '127.0.0.1', '::': '::1' }[HOST] ?? HOST;
-          const hostname = address.includes(':') ? `[${address}]` : address;
-          const url = `http://${hostname}:${PORT}/api/tasks/?runId=ci_runtime`;
-
-          for (let attempt = 1; ; attempt++) {
-            try {
-              const response = await fetch(url, {
-                headers: { Authorization: `Bearer ${API_TOKEN}` },
-                signal: AbortSignal.timeout(10000),
-              });
-              if (!response.ok) throw new Error(`Application database check returned HTTP ${response.status}`);
-              break;
-            } catch (error) {
-              if (attempt === 6 || error.cause?.code !== 'ECONNREFUSED') throw error;
-              await delay(1000);
-            }
-          }
-          console.log('Application database check passed');
-          JS
-      - run: npm audit --omit=dev --audit-level=high
       - uses: actions/upload-artifact@v4
         with:
           name: todo-students-node-24
           path: dist/
+          if-no-files-found: error
           retention-days: 7
